@@ -1,6 +1,5 @@
-import React from 'react';
+import React, { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
 import { IconCheck, IconChevronDown, IconFolder, IconHome, IconPin, IconPinned, IconPlus, IconDownload, IconSettings, IconMinus, IconSquare, IconX, IconCopy } from '@tabler/icons';
-import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -21,6 +20,7 @@ import ImportWorkspace from 'components/WorkspaceSidebar/ImportWorkspace';
 
 import IconBottombarToggle from 'components/Icons/IconBottombarToggle/index';
 import AppMenu from './AppMenu';
+import StudioPanel from './StudioPanel';
 import StyledWrapper from './StyledWrapper';
 import ResponseLayoutToggle from 'components/ResponsePane/ResponseLayoutToggle';
 import { isMacOS, isWindowsOS, isLinuxOS } from 'utils/common/platform';
@@ -121,6 +121,11 @@ const AppTitleBar = () => {
   const sidebarCollapsed = useSelector((state) => state.app.sidebarCollapsed);
   const isConsoleOpen = useSelector((state) => state.logs.isConsoleOpen);
   const activeWorkspace = workspaces.find((w) => w.uid === activeWorkspaceUid);
+  const activeCollection = useSelector((state) => {
+    const tab = state.tabs?.tabs?.find((t) => t.uid === state.tabs.activeTabUid);
+    return state.collections?.collections?.find((collection) => collection.uid === tab?.collectionUid);
+  });
+  const activeEnvironment = activeCollection?.environments?.find((env) => env.uid === activeCollection.activeEnvironmentUid)?.name;
 
   // Sort workspaces according to preferences
   const sortedWorkspaces = useMemo(() => {
@@ -298,11 +303,12 @@ const AppTitleBar = () => {
         {/* Center section: Bruno logo + text */}
         <div className="titlebar-center">
           <Bruno width={18} />
-          <span className="bruno-text">Bruno</span>
+          <span className="bruno-text">API Workspace Studio</span>
         </div>
 
         {/* Right section: Action buttons */}
         <div className="titlebar-right">
+          {activeWorkspace?.pathname && <StudioPanel workspace={activeWorkspace} activeEnvironment={activeEnvironment} />}
           <div className="titlebar-actions">
             {/* Toggle sidebar */}
             <ActionIcon

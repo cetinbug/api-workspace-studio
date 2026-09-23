@@ -30,6 +30,7 @@ const { getWsClient } = require('../ipc/network/ws-event-handlers');
 const { hasSubDirectories } = require('../utils/filesystem');
 const { readCollectionForApiSpec } = require('../utils/collection-reader');
 const { transformProxyConfig } = require('@usebruno/requests');
+const { managedFileSaved, validateStudioWrite } = require('./studio');
 
 const {
   DEFAULT_GITIGNORE,
@@ -514,7 +515,9 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
       }
 
       const content = await stringifyFolder(folderRoot, { format });
+      validateStudioWrite(folderFilePath, content);
       await writeFile(folderFilePath, content);
+      managedFileSaved(folderFilePath);
     } catch (error) {
       return Promise.reject(error);
     }
@@ -532,7 +535,9 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
       const filePath = path.join(collectionPathname, filename);
       const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : null;
       if (content === existing) return; // skip write if content unchanged
+      validateStudioWrite(filePath, content);
       await writeFile(filePath, content);
+      managedFileSaved(filePath);
     } catch (error) {
       console.error('Error in save-collection-root:', error);
       return Promise.reject(error);
@@ -556,6 +561,7 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
       validatePathIsInsideCollection(pathname);
 
       const content = await stringifyRequestViaWorker(request, { format });
+      validateStudioWrite(pathname, content);
       // Resolve filename collisions silently and atomically (race-safe).
       // Returns the path actually created so the renderer can target the right tab.
       const { pathname: createdPathname, filename } = await writeFileUnique(
@@ -564,6 +570,7 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
         format,
         content
       );
+      managedFileSaved(createdPathname);
       return { pathname: createdPathname, filename };
     } catch (error) {
       return Promise.reject(error);
@@ -583,7 +590,9 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
       syncExampleUidsCache(pathname, request.examples);
 
       const content = await stringifyRequestViaWorker(request, { format });
+      validateStudioWrite(pathname, content);
       await writeFile(pathname, content);
+      managedFileSaved(pathname);
     } catch (error) {
       return Promise.reject(error);
     }
@@ -652,7 +661,9 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
         validatePathIsInsideCollection(pathname);
 
         const content = await stringifyRequestViaWorker(request, { format: r.format });
+        validateStudioWrite(pathname, content);
         await writeFile(pathname, content);
+        managedFileSaved(pathname);
       }
     } catch (error) {
       return Promise.reject(error);
@@ -667,7 +678,9 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
         throw new Error(`path: ${pathname} does not exist`);
       }
 
+      validateStudioWrite(pathname, content);
       await writeFile(pathname, content);
+      managedFileSaved(pathname);
     } catch (error) {
       return Promise.reject(error);
     }
@@ -779,8 +792,9 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
       }
 
       const content = await stringifyEnvironment(environment, { format });
-
+      validateStudioWrite(envFilePath, content);
       await writeFile(envFilePath, content);
+      managedFileSaved(envFilePath);
     } catch (error) {
       return Promise.reject(error);
     }
@@ -814,7 +828,9 @@ const registerRendererEventHandlers = (mainWindow, watcher) => {
         const content = await stringifyEnvironment(environment, { format });
         const existing = fs.readFileSync(envFilePath, 'utf8');
         if (content === existing) return; // skip write if content unchanged
+        validateStudioWrite(envFilePath, content);
         await writeFile(envFilePath, content);
+        managedFileSaved(envFilePath);
       });
     } catch (error) {
       return Promise.reject(error);

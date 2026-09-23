@@ -8,6 +8,8 @@ const decomment = require('decomment');
 const contentDispositionParser = require('content-disposition');
 const mime = require('mime-types');
 const { ipcMain } = require('electron');
+const { resolveForRequest } = require('../studio');
+const { assertNoSecretShadowing } = require('../../studio/secrets');
 const { each, get, extend, cloneDeep, merge } = require('lodash');
 const { NtlmClient } = require('axios-ntlm');
 const { VarsRuntime, AssertRuntime, ScriptRuntime, TestRuntime, formatErrorWithContextV2 } = require('@usebruno/js');
@@ -386,7 +388,7 @@ const fetchGqlSchemaHandler = async (event, endpoint, environment, _request, col
     const resolvedRequest = cloneDeep(_request);
     // mergeVars modifies the request in place, but we'll assign it to ensure consistency
     mergeVars(collection, resolvedRequest, requestTreePath);
-    const envVars = getEnvVars(environment);
+    const { variables: envVars } = await resolveForRequest(collection.pathname, environment?.name, getEnvVars(environment));
 
     const globalEnvironmentVars = collection.globalEnvironmentVariables;
     const folderVars = resolvedRequest.folderVariables;
@@ -748,7 +750,7 @@ const registerNetworkIpc = (mainWindow) => {
     return scriptResult;
   };
 
-  const runRequest = async ({ item, collection, envVars, processEnvVars, runtimeVariables, runInBackground = false, callerBru = null, parentExecutionMode = null, parentRunnerEventData = null, parentRequestUid = null }) => {
+  const runRequest = async ({ item, collection, envVars, processEnvVars, runtimeVariables, studioSecretNames = [], runInBackground = false, callerBru = null, parentExecutionMode = null, parentRunnerEventData = null, parentRequestUid = null }) => {
     const collectionUid = collection.uid;
     const collectionPath = collection.pathname;
     const cancelTokenUid = uuid();
@@ -805,7 +807,7 @@ const registerNetworkIpc = (mainWindow) => {
           const startedAt = Date.now();
           let res, err;
           try {
-            res = await runRequest({ item: _item, collection, envVars, processEnvVars, runtimeVariables, runInBackground: true, callerBru, parentExecutionMode, parentRunnerEventData, parentRequestUid: requestUid });
+            res = await runRequest({ item: _item, collection, envVars, processEnvVars, runtimeVariables, studioSecretNames, runInBackground: true, callerBru, parentExecutionMode, parentRunnerEventData, parentRequestUid: requestUid });
           } catch (e) {
             err = e;
           }
@@ -883,6 +885,7 @@ const registerNetworkIpc = (mainWindow) => {
 
     const abortController = new AbortController();
     const request = await prepareRequest(item, collection, abortController);
+    assertNoSecretShadowing(request, runtimeVariables, studioSecretNames);
     // Every good boy deserves a response.
     if (request.method && request.method.toUpperCase() === 'WOOF') {
       return easterEggResponse(request);
@@ -1353,9 +1356,9 @@ const registerNetworkIpc = (mainWindow) => {
   ipcMain.handle('send-http-request', async (event, item, collection, environment, runtimeVariables) => {
     let seq = 0;
     const collectionUid = collection.uid;
-    const envVars = getEnvVars(environment);
+    const { variables: envVars, sources } = await resolveForRequest(collection.pathname, environment?.name, getEnvVars(environment));
     const processEnvVars = getProcessEnvVars(collectionUid);
-    const response = await runRequest({ item, collection, envVars, processEnvVars, runtimeVariables, runInBackground: false });
+    const response = await runRequest({ item, collection, envVars, processEnvVars, runtimeVariables, studioSecretNames: Object.keys(sources), runInBackground: false });
     if (response.stream) {
       const stream = response.stream;
       response.stream = { running: response.status >= 200 && response.status < 300 };
@@ -1430,7 +1433,7 @@ const registerNetworkIpc = (mainWindow) => {
       const scriptingConfig = get(brunoConfig, 'scripts', {});
       scriptingConfig.runtime = getJsSandboxRuntime(collection);
       scriptingConfig.cacheModules = false;
-      const envVars = getEnvVars(environment);
+      const { variables: envVars, sources } = await resolveForRequest(collection.pathname, environment?.name, getEnvVars(environment));
       const processEnvVars = getProcessEnvVars(collectionUid);
       let stopRunnerExecution = false;
       let currentAbortController;
@@ -1671,6 +1674,7 @@ const registerNetworkIpc = (mainWindow) => {
           }
 
           const request = await prepareRequest(item, collection, abortController);
+          assertNoSecretShadowing(request, runtimeVariables, Object.keys(sources));
           request.__bruno__executionMode = 'runner';
 
           const promptVars = await extractPromptVariablesForRequest({ request, collection, envVars, runtimeVariables, processEnvVars });

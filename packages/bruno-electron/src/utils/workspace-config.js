@@ -289,7 +289,10 @@ const generateYamlContent = (config) => {
 const writeWorkspaceConfig = async (workspacePath, config) => {
   return withLock(getWorkspaceLockKey(workspacePath), async () => {
     const yamlContent = generateYamlContent(config);
+    const filename = path.join(workspacePath, 'workspace.yml');
+    require('../ipc/studio').validateStudioWrite(filename, yamlContent);
     await writeWorkspaceFileAtomic(workspacePath, yamlContent);
+    require('../ipc/studio').managedFileSaved(filename);
   });
 };
 

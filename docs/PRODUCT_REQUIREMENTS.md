@@ -1,5 +1,9 @@
 # API Workspace Studio — ürün gereksinimleri
 
+> Historical draft (2026-09-23). The current implementation direction is in
+> [STUDIO_ARCHITECTURE.md](STUDIO_ARCHITECTURE.md). Its reusable-provider / Mock-first
+> model supersedes the single-Key-Vault assumptions below. Azure integration is deferred.
+
 **Durum:** İnceleme taslağı
 
 **Tarih:** 2026-09-23
