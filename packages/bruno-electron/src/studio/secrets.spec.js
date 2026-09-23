@@ -2,7 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { saveManifest } = require('./workspace');
-const { StudioSecrets, assertNoSecretShadowing } = require('./secrets');
+const { StudioSecrets, assertNoSecretShadowing, redactSecretValues } = require('./secrets');
 
 describe('API Workspace Studio secret resolution', () => {
   let root;
@@ -129,5 +129,12 @@ describe('API Workspace Studio secret resolution', () => {
       .toThrow(/also defined/);
     expect(() => assertNoSecretShadowing({ requestVariables: { other: 'value' } }, {}, ['apiKey']))
       .not.toThrow();
+  });
+
+  test('request diagnostics mask known secret values without changing outgoing data', () => {
+    const raw = { url: 'https://example.test/MOCK_VALUE_DO_NOT_COMMIT', headers: { authorization: 'Bearer MOCK_VALUE_DO_NOT_COMMIT' } };
+    const masked = redactSecretValues(raw, ['MOCK_VALUE_DO_NOT_COMMIT']);
+    expect(masked).toEqual({ url: 'https://example.test/[REDACTED]', headers: { authorization: 'Bearer [REDACTED]' } });
+    expect(raw.headers.authorization).toContain('MOCK_VALUE_DO_NOT_COMMIT');
   });
 });

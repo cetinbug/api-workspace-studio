@@ -9,7 +9,7 @@ const contentDispositionParser = require('content-disposition');
 const mime = require('mime-types');
 const { ipcMain } = require('electron');
 const { resolveForRequest } = require('../studio');
-const { assertNoSecretShadowing } = require('../../studio/secrets');
+const { assertNoSecretShadowing, redactSecretValues } = require('../../studio/secrets');
 const { each, get, extend, cloneDeep, merge } = require('lodash');
 const { NtlmClient } = require('axios-ntlm');
 const { VarsRuntime, AssertRuntime, ScriptRuntime, TestRuntime, formatErrorWithContextV2 } = require('@usebruno/js');
@@ -750,7 +750,7 @@ const registerNetworkIpc = (mainWindow) => {
     return scriptResult;
   };
 
-  const runRequest = async ({ item, collection, envVars, processEnvVars, runtimeVariables, studioSecretNames = [], runInBackground = false, callerBru = null, parentExecutionMode = null, parentRunnerEventData = null, parentRequestUid = null }) => {
+  const runRequest = async ({ item, collection, envVars, processEnvVars, runtimeVariables, studioSecretNames = [], studioSecretValues = [], runInBackground = false, callerBru = null, parentExecutionMode = null, parentRunnerEventData = null, parentRequestUid = null }) => {
     const collectionUid = collection.uid;
     const collectionPath = collection.pathname;
     const cancelTokenUid = uuid();
@@ -807,7 +807,7 @@ const registerNetworkIpc = (mainWindow) => {
           const startedAt = Date.now();
           let res, err;
           try {
-            res = await runRequest({ item: _item, collection, envVars, processEnvVars, runtimeVariables, studioSecretNames, runInBackground: true, callerBru, parentExecutionMode, parentRunnerEventData, parentRequestUid: requestUid });
+            res = await runRequest({ item: _item, collection, envVars, processEnvVars, runtimeVariables, studioSecretNames, studioSecretValues, runInBackground: true, callerBru, parentExecutionMode, parentRunnerEventData, parentRequestUid: requestUid });
           } catch (e) {
             err = e;
           }
@@ -993,14 +993,14 @@ const registerNetworkIpc = (mainWindow) => {
         }
       });
 
-      requestSent = {
+      requestSent = redactSecretValues({
         url: request.url,
         method: request.method,
         headers: headersSent,
         data: requestData,
         dataBuffer: requestDataBuffer,
         timestamp: Date.now()
-      };
+      }, studioSecretValues);
 
       !runInBackground && mainWindow.webContents.send('main:run-request-event', {
         type: 'request-sent',
@@ -1358,7 +1358,16 @@ const registerNetworkIpc = (mainWindow) => {
     const collectionUid = collection.uid;
     const { variables: envVars, sources } = await resolveForRequest(collection.pathname, environment?.name, getEnvVars(environment));
     const processEnvVars = getProcessEnvVars(collectionUid);
-    const response = await runRequest({ item, collection, envVars, processEnvVars, runtimeVariables, studioSecretNames: Object.keys(sources), runInBackground: false });
+    const studioSecretNames = Object.keys(sources);
+    const studioSecretValues = studioSecretNames.map((name) => envVars[name]);
+    const response = await runRequest({ item, collection, envVars, processEnvVars, runtimeVariables, studioSecretNames, studioSecretValues, runInBackground: false });
+    response.url = redactSecretValues(response.url, studioSecretValues);
+    response.timeline = redactSecretValues(response.timeline, studioSecretValues);
+    response.data = redactSecretValues(response.data, studioSecretValues);
+    response.error = redactSecretValues(response.error, studioSecretValues);
+    if (response.dataBuffer && studioSecretValues.some((secret) => {
+      return typeof secret === 'string' && secret.length && Buffer.from(response.dataBuffer, 'base64').includes(Buffer.from(secret));
+    })) response.dataBuffer = null;
     if (response.stream) {
       const stream = response.stream;
       response.stream = { running: response.status >= 200 && response.status < 300 };
@@ -1434,6 +1443,7 @@ const registerNetworkIpc = (mainWindow) => {
       scriptingConfig.runtime = getJsSandboxRuntime(collection);
       scriptingConfig.cacheModules = false;
       const { variables: envVars, sources } = await resolveForRequest(collection.pathname, environment?.name, getEnvVars(environment));
+      const studioSecretValues = Object.keys(sources).map((name) => envVars[name]);
       const processEnvVars = getProcessEnvVars(collectionUid);
       let stopRunnerExecution = false;
       let currentAbortController;
@@ -1801,14 +1811,14 @@ const registerNetworkIpc = (mainWindow) => {
               }
             });
 
-            let requestSent = {
+            let requestSent = redactSecretValues({
               url: request.url,
               method: request.method,
               headers: headersSent,
               data: requestData,
               dataBuffer: requestDataBuffer,
               timestamp: Date.now()
-            };
+            }, studioSecretValues);
 
             // todo:
             // i have no clue why electron can't send the request object

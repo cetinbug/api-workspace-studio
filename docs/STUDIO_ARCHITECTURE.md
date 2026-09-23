@@ -19,7 +19,9 @@ The Studio environment name must match the active Bruno collection environment
 name. Add a logical secret, map it to a provider/reference and a request variable,
 then enter a Mock value. Use `{{variableName}}` in a Bruno request. The main process
 resolves it immediately before the HTTP request (including collection-runner and
-GraphQL schema requests); the renderer receives only source status, not the value.
+GraphQL schema requests); Studio status IPC returns source status, not the value.
+For Studio-bound HTTP secrets, the outgoing request uses the real value while
+request diagnostics sent back to the renderer mask known secret values.
 
 ## Shared manifest
 

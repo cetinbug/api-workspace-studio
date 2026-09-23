@@ -71,6 +71,7 @@ const ipc = (page, channel, ...args) => page.evaluate(
     const response = await ipc(page, 'send-http-request', item, collection, { name: 'Test', variables: [] }, {});
     assert.equal(response.status, 200, response.error || 'HTTP request failed');
     assert.equal(receivedKey, 'MOCK_SMOKE_SECRET');
+    assert.equal(response.requestSent.headers['x-api-key'], '[REDACTED]');
     await ipc(page, 'studio:cache', workspace, 'enable', { password: 'strong-smoke-password' });
     await ipc(page, 'studio:check-secrets', workspace, 'Test');
     const cacheFile = path.join(userWorkspacePath(userData, workspace), 'cache.enc.json');

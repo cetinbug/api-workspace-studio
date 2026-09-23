@@ -173,4 +173,21 @@ const assertNoSecretShadowing = (request, runtimeVariables, names) => {
   }
 };
 
-module.exports = { StudioSecrets, MockSecretProvider, ProviderError, assertNoSecretShadowing };
+const redactSecretValues = (value, secretValues, seen = new WeakSet()) => {
+  const secrets = [...new Set(secretValues.filter((secret) => typeof secret === 'string' && secret.length))]
+    .sort((left, right) => right.length - left.length);
+  if (!secrets.length) return value;
+  if (typeof value === 'string') {
+    return secrets.reduce((text, secret) => text.replaceAll(secret, '[REDACTED]'), value);
+  }
+  if (Buffer.isBuffer(value)) return secrets.some((secret) => value.includes(Buffer.from(secret))) ? null : value;
+  if (value instanceof ArrayBuffer) return secrets.some((secret) => Buffer.from(value).includes(Buffer.from(secret))) ? null : value;
+  if (!value || typeof value !== 'object') return value;
+  if (seen.has(value)) return null;
+  seen.add(value);
+  if (Array.isArray(value)) return value.map((entry) => redactSecretValues(entry, secrets, seen));
+  if (Object.getPrototypeOf(value) !== Object.prototype) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, redactSecretValues(entry, secrets, seen)]));
+};
+
+module.exports = { StudioSecrets, MockSecretProvider, ProviderError, assertNoSecretShadowing, redactSecretValues };
