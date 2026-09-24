@@ -32,7 +32,11 @@ const ipc = (page, channel, ...args) => page.evaluate(
     });
     const page = await electronApp.firstWindow();
     await page.locator('.app-titlebar').waitFor({ timeout: 60000 });
+    await page.locator('[data-app-state="loaded"]').waitFor({ timeout: 10000 });
     assert.match(await page.locator('.bruno-text').textContent(), /API Workspace Studio/);
+    await page.getByText('Quick Actions', { exact: true }).waitFor({ timeout: 10000 });
+    await page.reload();
+    await page.getByText('Quick Actions', { exact: true }).waitFor({ timeout: 10000 });
 
     const created = await ipc(page, 'renderer:create-workspace', 'Smoke Workspace', 'smoke-workspace', temp);
     const workspace = created.workspacePath;

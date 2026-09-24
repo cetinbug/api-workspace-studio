@@ -683,6 +683,14 @@ const registerWorkspaceIpc = (mainWindow, workspaceWatcher) => {
   // Guard to prevent main:renderer-ready from running multiple times (only needed in dev mode due to strict mode)
   let rendererReadyProcessed = false;
 
+  // A full renderer reload creates a new Redux store. Rehydrate its workspaces
+  // even though the Electron main process is still the same instance.
+  mainWindow.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) {
+      rendererReadyProcessed = false;
+    }
+  });
+
   ipcMain.on('main:renderer-ready', async (win) => {
     if (isDev && rendererReadyProcessed) {
       return;

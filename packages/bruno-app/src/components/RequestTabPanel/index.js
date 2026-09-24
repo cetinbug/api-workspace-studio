@@ -417,6 +417,12 @@ const RequestTabPanel = () => {
   }
 
   if (!activeTabUid || !focusedTab) {
+    // A new workspace may not have an active tab yet. It is ready for use,
+    // so show its overview instead of an indefinite loading indicator.
+    if (activeWorkspace) {
+      return <WorkspaceOverview workspace={activeWorkspace} />;
+    }
+
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 text-muted">
         <IconLoader2 className="animate-spin" size={24} strokeWidth={1.5} />
