@@ -18,12 +18,14 @@ const { format } = require('url');
 const { BrowserWindow, app, session, Menu, globalShortcut, ipcMain, nativeTheme, shell } = require('electron');
 const { setContentSecurityPolicy } = require('electron-util');
 
-if (isDev && process.env.ELECTRON_USER_DATA_PATH) {
-  console.debug('`ELECTRON_USER_DATA_PATH` found, modifying `userData` path: \n'
-    + `\t${app.getPath('userData')} -> ${process.env.ELECTRON_USER_DATA_PATH}`);
-
-  app.setPath('userData', process.env.ELECTRON_USER_DATA_PATH);
-}
+// Keep this fork's preferences, collections, cookies and Studio secrets separate
+// from an existing Bruno installation. Tests can still supply an isolated path.
+const studioUserDataPath = isDev && process.env.ELECTRON_USER_DATA_PATH
+  ? process.env.ELECTRON_USER_DATA_PATH
+  : path.join(app.getPath('appData'), 'API Workspace Studio');
+fs.mkdirSync(studioUserDataPath, { recursive: true });
+app.setPath('userData', studioUserDataPath);
+app.setName('API Workspace Studio');
 
 // Command line switches
 if (os.platform() === 'linux') {
@@ -150,9 +152,9 @@ if (useSingleInstance && !gotTheLock) {
   // This is the primary instance (or single instance is disabled)
 
   // Try to remove any existing registrations
-  app.removeAsDefaultProtocolClient('bruno');
-  // Register as default handler for `bruno://` protocol URLs
-  app.setAsDefaultProtocolClient('bruno');
+  app.removeAsDefaultProtocolClient('api-workspace-studio');
+  // Keep this fork's OAuth callback scheme separate from Bruno's.
+  app.setAsDefaultProtocolClient('api-workspace-studio');
 
   if (isLinux) {
     try {
@@ -244,7 +246,7 @@ app.on('ready', async () => {
       preload: path.join(__dirname, 'preload.js'),
       webviewTag: true
     },
-    title: 'Bruno',
+    title: 'API Workspace Studio',
     icon: path.join(__dirname, 'about/256x256.png'),
     titleBarStyle: isMac ? 'hiddenInset' : isWindows ? 'hidden' : undefined,
     frame: isLinux ? false : true,

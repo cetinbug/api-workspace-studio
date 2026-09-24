@@ -28,14 +28,16 @@ const electronDir = path.join(rootDir, 'packages/bruno-electron');
 
 let electronProcess = null;
 let detectedPort = null;
+let recentWebOutput = '';
 
 // Regex to match rsbuild's local URL output (e.g., "➜ Local:    http://localhost:3000/")
 const portRegex = /Local:\s+http:\/\/localhost:(\d+)/;
+const ansiRegex = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 
-console.log(`\n${colors.bright}${colors.yellow}🚀 Starting Bruno development environment...${colors.reset}\n`);
+console.log(`\n${colors.bright}${colors.yellow}🚀 Starting API Workspace Studio development environment...${colors.reset}\n`);
 
 // Start the rsbuild dev server
-const webProcess = spawn('npm', ['run', 'dev'], {
+const webProcess = spawn('npm run dev', {
   cwd: webDir,
   stdio: ['inherit', 'pipe', 'pipe'],
   shell: true
@@ -45,9 +47,12 @@ webProcess.stdout.on('data', (data) => {
   const output = data.toString();
   process.stdout.write(output);
 
+  // Rsbuild may colorize its URL or split the line across stdout chunks.
+  recentWebOutput = (recentWebOutput + output.replace(ansiRegex, '')).slice(-2048);
+
   // Try to detect the port from rsbuild output
   if (!detectedPort) {
-    const match = output.match(portRegex);
+    const match = recentWebOutput.match(portRegex);
     if (match) {
       detectedPort = match[1];
       log.success(`Detected dev server on port ${colors.bright}${detectedPort}${colors.reset}`);
@@ -68,14 +73,17 @@ webProcess.on('close', (code) => {
 function startElectron(port) {
   log.info(`Starting Electron with ${colors.cyan}BRUNO_DEV_PORT=${port}${colors.reset}`);
 
-  electronProcess = spawn('npm', ['run', 'dev'], {
+  const electronEnv = {
+    ...process.env,
+    BRUNO_DEV_PORT: port
+  };
+  delete electronEnv.ELECTRON_RUN_AS_NODE;
+
+  electronProcess = spawn('npm run dev', {
     cwd: electronDir,
     stdio: 'inherit',
     shell: true,
-    env: {
-      ...process.env,
-      BRUNO_DEV_PORT: port
-    }
+    env: electronEnv
   });
 
   electronProcess.on('close', (code) => {
